@@ -26,6 +26,7 @@ impl Options {
     /// Create a new `FileName` that prints the given file’s name, painting it
     /// with the remaining arguments.
     pub fn for_file<'a, 'dir, C>(self, file: &'a File<'dir>, colours: &'a C) -> FileName<'a, 'dir, C> {
+        use ansi_term::Colour::*;
         FileName {
             file,
             colours,
@@ -54,7 +55,7 @@ enum LinkStyle {
 
 
 /// Whether to append file class characters to the file names.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum Classify {
 
     /// Just display the file names, without any characters.
@@ -73,7 +74,7 @@ impl Default for Classify {
 
 
 /// Whether and how to show icons.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ShowIcons {
 
     /// Don’t show icons at all.
@@ -226,7 +227,7 @@ impl<'a, 'dir, C: Colours> FileName<'a, 'dir, C> {
         let coconut = parent.components().count();
 
         if coconut == 1 && parent.has_root() {
-            bits.push(self.colours.symlink_path().paint(std::path::MAIN_SEPARATOR.to_string()));
+            bits.push(self.colours.symlink_path().paint("/"));
         }
         else if coconut >= 1 {
             escape(
@@ -235,13 +236,12 @@ impl<'a, 'dir, C: Colours> FileName<'a, 'dir, C> {
                 self.colours.symlink_path(),
                 self.colours.control_char(),
             );
-            bits.push(self.colours.symlink_path().paint(std::path::MAIN_SEPARATOR.to_string()));
+            bits.push(self.colours.symlink_path().paint("/"));
         }
     }
 
     /// The character to be displayed after a file when classifying is on, if
     /// the file’s type has one associated with it.
-    #[cfg(unix)]
     fn classify_char(&self, file: &File<'_>) -> Option<&'static str> {
         if file.is_executable_file() {
             Some("*")
@@ -263,19 +263,6 @@ impl<'a, 'dir, C: Colours> FileName<'a, 'dir, C> {
         }
     }
 
-    #[cfg(windows)]
-    fn classify_char(&self, file: &File<'_>) -> Option<&'static str> {
-        if file.is_directory() {
-            Some("/")
-        }
-        else if file.is_link() {
-            Some("@")
-        }
-        else {
-            None
-        }
-    }
-
     /// Returns at least one ANSI-highlighted string representing this file’s
     /// name using the given set of colours.
     ///
@@ -286,19 +273,35 @@ impl<'a, 'dir, C: Colours> FileName<'a, 'dir, C> {
     ///
     /// So in that situation, those characters will be escaped and highlighted in
     /// a different colour.
+
     fn coloured_file_name<'unused>(&self) -> Vec<ANSIString<'unused>> {
         let file_style = self.style();
         let mut bits = Vec::new();
 
-        escape(
-            self.file.name.clone(),
-            &mut bits,
-            file_style,
-            self.colours.control_char(),
-        );
+        let file_name = self.file.name.clone();
+
+        // Check if "git" exists in the file name
+        let mut start = 0;
+        while let Some(index) = file_name[start..].find("git") {
+            let git_index = start + index;
+
+            // Push the part of the file name before the current "git" occurrence 
+            escape(file_name[start..git_index].to_string(), &mut bits, file_style, self.colours.control_char());
+
+            // Push "git" with green color
+            bits.push(self.colours.git_color().paint("git"));
+
+            // Update start index to the character after the current "git" occurrence
+            start = git_index + 3; // 3 is the length of "git"
+        }
+
+        // Push the remaining part of the file name after the last "git" occurrence without any coloring
+        escape(file_name[start..].to_string(), &mut bits, file_style, self.colours.control_char());
 
         bits
     }
+
+
 
     /// Figures out which colour to paint the filename part of the output,
     /// depending on which “type” of file it appears to be — either from the
@@ -315,16 +318,11 @@ impl<'a, 'dir, C: Colours> FileName<'a, 'dir, C> {
 
         match self.file {
             f if f.is_directory()        => self.colours.directory(),
-            #[cfg(unix)]
             f if f.is_executable_file()  => self.colours.executable_file(),
             f if f.is_link()             => self.colours.symlink(),
-            #[cfg(unix)]
             f if f.is_pipe()             => self.colours.pipe(),
-            #[cfg(unix)]
             f if f.is_block_device()     => self.colours.block_device(),
-            #[cfg(unix)]
             f if f.is_char_device()      => self.colours.char_device(),
-            #[cfg(unix)]
             f if f.is_socket()           => self.colours.socket(),
             f if ! f.is_file()           => self.colours.special(),
             _                            => self.colours.colour_file(self.file),
@@ -362,6 +360,9 @@ pub trait Colours: FiletypeColours {
     fn executable_file(&self) -> Style;
 
     fn colour_file(&self, file: &File<'_>) -> Style;
+
+    // Add this method to the Colours trait
+    fn git_color(&self) -> Style;
 }
 
 

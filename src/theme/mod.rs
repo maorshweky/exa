@@ -304,6 +304,11 @@ impl FileNameColours for Theme {
     fn colour_file(&self, file: &File<'_>) -> Style {
         self.exts.colour_file(file).unwrap_or(self.ui.filekinds.normal)
     }
+
+    fn git_color(&self) -> Style {
+        use ansi_term::Colour;
+        Colour::Green.normal()
+    }
 }
 
 
@@ -400,6 +405,8 @@ mod customs_test {
             }
         };
     }
+
+
 
 
     // LS_COLORS can affect all of these colours:
@@ -510,6 +517,7 @@ mod customs_test {
     test!(exa_txt: ls "", exa "*.zip=31"           =>  exts [ ("*.zip",      Red.normal())             ]);
     test!(exa_mp3: ls "", exa "lev.*=38;5;153"     =>  exts [ ("lev.*",      Fixed(153).normal())      ]);
     test!(exa_mak: ls "", exa "Cargo.toml=4;32;1"  =>  exts [ ("Cargo.toml", Green.bold().underline()) ]);
+    test!(exa_git_ss: ls "", exa "my_git.txt=32"  =>  exts [ ("my_git.txt", Green.normal()) ]);
 
     // Testing whether a glob from EXA_COLORS overrides a glob from LS_COLORS
     // can’t be tested here, because they’ll both be added to the same vec
@@ -525,4 +533,5 @@ mod customs_test {
     // Finally, colours get applied right-to-left:
     test!(ls_overwrite:  ls "pi=31:pi=32:pi=33", exa ""  =>  colours c -> { c.filekinds.pipe = Yellow.normal(); });
     test!(exa_overwrite: ls "", exa "da=36:da=35:da=34"  =>  colours c -> { c.date = Blue.normal(); });
+
 }
